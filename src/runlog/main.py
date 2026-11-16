@@ -2,10 +2,13 @@ import os
 import sqlite3
 from datetime import date
 
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
+from pwdlib import PasswordHash
+from pydantic import BaseModel, Field
 
 app = FastAPI()
+
+hasher = PasswordHash.recommended()
 
 def get_connection():
     path = os.getenv("DATABASE_PATH", "runlog.db")
@@ -19,6 +22,10 @@ class RunCreate(BaseModel):
     duration_seconds: int
     run_type: str | None = None
     notes: str | None = None
+
+class UserCreate(BaseModel):
+    email: str
+    password: str = Field(min_length=8)
 
 @app.get("/health")
 def health():
@@ -43,5 +50,25 @@ def create_run(run: RunCreate):
     conn.commit()
     conn.close()
     return {"id": new_id}
+
+@app.post("/register")
+def create_user(user: UserCreate):
+    password_hashed = hasher.hash(user.password)
+    conn = get_connection()
+
+    try:
+        cursor = conn.execute(
+            "insert into users (email, password_hash) "
+            "values (?, ?)",
+            (user.email, password_hashed)
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=409, detail="Email already registered")
+    finally:
+        conn.close()
+    
+    return {"id": new_id, "email": user.email}
     
 
