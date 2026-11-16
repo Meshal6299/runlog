@@ -13,6 +13,7 @@ SCHEMA = Path(__file__).parent.parent / "schema.sql"
 def client(tmp_path, monkeypatch):
     db_file = tmp_path / "test.db"
     monkeypatch.setenv("DATABASE_PATH", str(db_file))
+    monkeypatch.setenv("SECRET_KEY", "test-secret")
     conn = sqlite3.connect(db_file)
     conn.executescript(SCHEMA.read_text())
     conn.execute("insert into users (email, password_hash) values ('t@t.com', 'x')")

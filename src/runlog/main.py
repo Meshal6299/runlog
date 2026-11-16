@@ -1,7 +1,8 @@
 import os
 import sqlite3
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
+import jwt
 from fastapi import FastAPI, HTTPException
 from pwdlib import PasswordHash
 from pydantic import BaseModel, Field
@@ -15,6 +16,9 @@ def get_connection():
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     return conn
+
+def get_secret_key():
+    return os.environ["SECRET_KEY"]
 
 class RunCreate(BaseModel):
     run_date: date
@@ -70,5 +74,24 @@ def create_user(user: UserCreate):
         conn.close()
     
     return {"id": new_id, "email": user.email}
-    
 
+
+@app.post("/login")
+def UserLogin(user: UserCreate):
+    conn = get_connection()
+    try:
+        row = conn.execute("select id, password_hash from users where email = ?",(user.email,),).fetchone()
+    finally:
+        conn.close()
+
+    if row is None or not hasher.verify(user.password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    payload = {
+        "sub": str(row["id"]),                              # subject: which user this token is for
+        "exp": datetime.now(UTC) + timedelta(minutes=30),   # expiry: when the token stops working
+    }
+
+    token = jwt.encode(payload, get_secret_key(), algorithm="HS256")
+
+    return {"access_token": token, "token_type": "bearer"}
