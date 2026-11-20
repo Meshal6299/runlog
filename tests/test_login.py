@@ -1,6 +1,7 @@
 import os
 import sqlite3
 
+
 def test_register(client):
     response = client.post(
         "/register",

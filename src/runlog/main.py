@@ -1,9 +1,10 @@
 import os
 import sqlite3
 from datetime import UTC, date, datetime, timedelta
+from typing import Annotated
 
 import jwt
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
@@ -24,7 +25,7 @@ def get_secret_key():
     return os.environ["SECRET_KEY"]
 
 def get_current_user_id(
-        credentials: HTTPAuthorizationCredentials = Depends(security)
+        credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
 ):
     try:
         payload = jwt.decode(
@@ -109,3 +110,21 @@ def UserLogin(user: UserCreate):
     token = jwt.encode(payload, get_secret_key(), algorithm="HS256")
 
     return {"access_token": token, "token_type": "bearer"}
+
+@app.delete("/runs/{run_id}")
+def delete_run(run_id: int, user_id: int = Depends(get_current_user_id)):
+    conn = get_connection()
+    try:
+        cursor = conn.execute(
+            "delete from runs where id = ? and user_id = ?", 
+            (run_id,user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+
+    return {"id": run_id}
