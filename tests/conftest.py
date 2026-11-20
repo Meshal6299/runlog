@@ -20,3 +20,10 @@ def client(tmp_path, monkeypatch):
     conn.commit()
     conn.close()
     return TestClient(app)
+
+@pytest.fixture
+def auth_headers(client):
+    creds = {"email": "runner@example.com", "password": "testpass123"}
+    client.post("/register", json=creds)
+    token = client.post("/login", json=creds).json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}

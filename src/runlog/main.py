@@ -3,13 +3,16 @@ import sqlite3
 from datetime import UTC, date, datetime, timedelta
 
 import jwt
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
 from pydantic import BaseModel, Field
 
 app = FastAPI()
 
 hasher = PasswordHash.recommended()
+security = HTTPBearer()
 
 def get_connection():
     path = os.getenv("DATABASE_PATH", "runlog.db")
@@ -19,6 +22,17 @@ def get_connection():
 
 def get_secret_key():
     return os.environ["SECRET_KEY"]
+
+def get_current_user_id(
+        credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    try:
+        payload = jwt.decode(
+            credentials.credentials, get_secret_key(), algorithms=["HS256"]
+        )
+    except InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return int(payload["sub"])
 
 class RunCreate(BaseModel):
     run_date: date
@@ -36,19 +50,19 @@ def health():
     return {"status": "ok"}
 
 @app.get("/runs")
-def list_runs():
+def list_runs(user_id: int = Depends(get_current_user_id)):
     conn = get_connection()
-    rows = conn.execute("select * from runs").fetchall()
+    rows = conn.execute("select * from runs where user_id = ? order by run_date desc",(user_id,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 @app.post("/runs")
-def create_run(run: RunCreate):
+def create_run(run: RunCreate,user_id: int = Depends(get_current_user_id)):
     conn = get_connection()
     cursor = conn.execute(
         "insert into runs (user_id, run_date, distance_km, duration_seconds, run_type, notes) "
         "values (?, ?, ?, ?, ?, ?)",
-        (1, run.run_date.isoformat(), run.distance_km, run.duration_seconds, run.run_type, run.notes),
+        (user_id, run.run_date.isoformat(), run.distance_km, run.duration_seconds, run.run_type, run.notes),
     )
     new_id = cursor.lastrowid
     conn.commit()
