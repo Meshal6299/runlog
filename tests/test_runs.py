@@ -23,6 +23,25 @@ def test_create_run_rejects_bad_distance(client, auth_headers):
     )
     assert response.status_code == 422
 
+def test_create_run_rejects_negative_distance(client, auth_headers):
+    response = client.post(
+        "/runs",
+        json={"run_date": "2026-11-15", "distance_km": -5, "duration_seconds": 3000},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "distance_km"]
+
+def test_create_run_rejects_negative_duration(client, auth_headers):
+    response = client.post(
+        "/runs",
+        json={"run_date": "2026-11-15", "distance_km": 10, "duration_seconds": 0},
+        headers=auth_headers,
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "duration_seconds"]
+
 def test_create_run_reject_bad_time(client, auth_headers):
     response = client.post(
         "/runs",

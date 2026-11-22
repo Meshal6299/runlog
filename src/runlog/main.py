@@ -37,8 +37,8 @@ def get_current_user_id(
 
 class RunCreate(BaseModel):
     run_date: date
-    distance_km: float
-    duration_seconds: int
+    distance_km: float = Field(gt=0)
+    duration_seconds: int = Field(gt=0)
     run_type: str | None = None
     notes: str | None = None
 
