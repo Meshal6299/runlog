@@ -79,7 +79,7 @@ def create_user(user: UserCreate):
         cursor = conn.execute(
             "insert into users (email, password_hash) "
             "values (?, ?)",
-            (user.email, password_hashed)
+            (user.email.lower(), password_hashed)
         )
         conn.commit()
         new_id = cursor.lastrowid

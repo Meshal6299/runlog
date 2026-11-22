@@ -59,7 +59,7 @@ def test_register_stores_hash(client):
     conn = sqlite3.connect(os.environ["DATABASE_PATH"])
     row = conn.execute(
         "select password_hash from users where email = ?",
-        ("John@a.com",),
+        ("john@a.com",),
     ).fetchone()
     conn.close()
 
@@ -101,3 +101,17 @@ def test_login_wrong_email(client):
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid email or password"
+
+def test_login_same_email_lower_upper(client):
+    client.post(
+        "/register",
+        json={"email": "Runner@Example.com", "password": "testpass123"}
+    )
+
+    response = client.post(
+        "/login",
+        json={"email": "runner@example.com", "password": "testpass123"}
+    )
+
+    assert response.status_code == 200
+
