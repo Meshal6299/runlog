@@ -128,3 +128,23 @@ def delete_run(run_id: int, user_id: int = Depends(get_current_user_id)):
 
 
     return {"id": run_id}
+
+@app.put("/runs/{run_id}")
+def update_run(run_id: int, run: RunCreate, user_id: int = Depends(get_current_user_id)):
+    conn = get_connection()
+    try:
+        cursor = conn.execute(
+            "update runs set run_date = ?, distance_km = ?, duration_seconds = ?, "
+            "run_type = ?, notes = ? "
+            "where id = ? and user_id = ?",
+            (run.run_date.isoformat(), run.distance_km, run.duration_seconds, run.run_type, run.notes, run_id, user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    return {"id": run_id}
+

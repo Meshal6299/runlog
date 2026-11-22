@@ -167,5 +167,117 @@ def test_delete_userA_run_with_userB(client, auth_headers):
 
     assert response.json()[0]["id"] == run_id   
 
+def test_update_run(client, auth_headers):
+    run = client.post(
+        "/runs",
+        json={"run_date": "2026-11-15", "distance_km": 10, "duration_seconds": 3000},
+        headers=auth_headers,
+    )
 
+    run_id = run.json()["id"]
+
+    response = client.put(
+        f"/runs/{run_id}",
+        json={"run_date": "2026-11-15", "distance_km": 11, "duration_seconds": 3000},
+        headers=auth_headers
+    )
+
+    assert response.status_code == 200
+
+    runs = client.get("/runs", headers=auth_headers).json()
+    assert len(runs) == 1
+    assert runs[0]["id"] == run_id
+    assert runs[0]["distance_km"] == 11
+
+def test_update_runA_with_userB(client, auth_headers):
+    run_a = client.post(
+        "/runs",
+        json={"run_date": "2026-11-15", "distance_km": 10, "duration_seconds": 3000},
+        headers=auth_headers,
+    )
+    
+    creds_b = {"email": "other@example.com", "password": "testpass456"}
+    client.post("/register", json=creds_b)
+    token_b = client.post("/login", json=creds_b).json()["access_token"]
+    headers_b = {"Authorization": f"Bearer {token_b}"}
+    
+    run_id = run_a.json()["id"]
+
+    response = client.put(
+        f"/runs/{run_id}",
+        json={"run_date": "2026-11-15", "distance_km": 11, "duration_seconds": 3000},
+        headers=headers_b
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Run not found"
+
+    runs = client.get("/runs", headers=auth_headers).json()
+
+    assert len(runs) == 1
+    assert runs[0]["distance_km"] == 10
+
+def test_update_run_non_id(client, auth_headers):
+    response = client.put(
+        "/runs/999",
+        json={"run_date": "2026-11-15", "distance_km": 10, "duration_seconds": 3000},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Run not found"
+
+def test_update_with_bad_distance(client, auth_headers):
+    run = client.post(
+        "/runs",
+        json={"run_date": "2026-11-15", "distance_km": 10, "duration_seconds": 3000},
+        headers=auth_headers,
+    )
+
+    run_id = run.json()["id"]
+
+    response = client.put(
+        f"/runs/{run_id}",
+        json={"run_date": "2026-11-15", "distance_km": "abc", "duration_seconds": 3000},
+        headers=auth_headers,
+    )
+
+    runs = client.get("/runs", headers=auth_headers).json()
+    assert runs[0]["distance_km"] == 10
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "distance_km"]
+
+def test_update_no_token(client, auth_headers):
+    run = client.post(
+        "/runs",
+        json={"run_date": "2026-11-15", "distance_km": 10, "duration_seconds": 3000},
+        headers=auth_headers,
+    )
+
+    run_id = run.json()["id"]
+
+    response = client.put(
+        f"/runs/{run_id}",
+        json={"run_date": "2026-11-15", "distance_km": 12, "duration_seconds": 3000},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"
+
+def test_delete_no_token(client, auth_headers):
+    client.post(
+        "/runs",
+        json={"run_date": "2026-11-15", "distance_km": 10, "duration_seconds": 3000},
+        headers=auth_headers,
+    )
+
+    response = client.delete(
+        "/runs/1",
+    )
+
+    runs = client.get("/runs", headers=auth_headers).json()
+
+    assert response.status_code == 401
+    assert len(runs) == 1
 
