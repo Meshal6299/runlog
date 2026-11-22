@@ -167,6 +167,22 @@ def test_delete_userA_run_with_userB(client, auth_headers):
 
     assert response.json()[0]["id"] == run_id   
 
+def test_delete_no_token(client, auth_headers):
+    client.post(
+        "/runs",
+        json={"run_date": "2026-11-15", "distance_km": 10, "duration_seconds": 3000},
+        headers=auth_headers,
+    )
+
+    response = client.delete(
+        "/runs/1",
+    )
+
+    runs = client.get("/runs", headers=auth_headers).json()
+
+    assert response.status_code == 401
+    assert len(runs) == 1
+
 def test_update_run(client, auth_headers):
     run = client.post(
         "/runs",
@@ -264,20 +280,4 @@ def test_update_no_token(client, auth_headers):
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Not authenticated"
-
-def test_delete_no_token(client, auth_headers):
-    client.post(
-        "/runs",
-        json={"run_date": "2026-11-15", "distance_km": 10, "duration_seconds": 3000},
-        headers=auth_headers,
-    )
-
-    response = client.delete(
-        "/runs/1",
-    )
-
-    runs = client.get("/runs", headers=auth_headers).json()
-
-    assert response.status_code == 401
-    assert len(runs) == 1
 
