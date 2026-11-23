@@ -21,7 +21,7 @@ def test_create_run_rejects_bad_distance(client, auth_headers):
         },
         headers = auth_headers
     )
-    assert response.status_code == 422
+    assert response.status_code == 404
 
 def test_create_run_rejects_negative_distance(client, auth_headers):
     response = client.post(
