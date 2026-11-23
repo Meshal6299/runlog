@@ -42,7 +42,7 @@ def test_create_run_rejects_negative_duration(client, auth_headers):
     assert response.status_code == 422
     assert response.json()["detail"][0]["loc"] == ["body", "duration_seconds"]
 
-def test_create_run_reject_bad_time(client, auth_headers):
+def test_create_run_rejects_bad_time(client, auth_headers):
     response = client.post(
         "/runs",
         json={
@@ -84,16 +84,122 @@ def test_list_runs(client, auth_headers):
     assert len(response.json()) == 1
     assert response.json()[0]["distance_km"] == 21
 
+def test_list_run_type_match(client, auth_headers):
+    client.post(
+        "/runs",
+        json={
+            "run_date": "2026-11-15",
+            "distance_km": 21,
+            "duration_seconds": 7550,
+            "run_type": "long"
+        },
+        headers = auth_headers
+    )
+
+    client.post(
+        "/runs",
+        json={
+            "run_date": "2026-11-15",
+            "distance_km": 5,
+            "duration_seconds": 2000,
+            "run_type": "easy"
+        },
+        headers = auth_headers
+    )
+
+    response = client.get("/runs?run_type=long",headers=auth_headers,)
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["run_type"] == "long"
+
+def test_list_run_type_no_match(client, auth_headers):
+    client.post(
+        "/runs",
+        json={
+            "run_date": "2026-11-15",
+            "distance_km": 21,
+            "duration_seconds": 7550,
+            "run_type": "long"
+        },
+        headers = auth_headers
+    )
+
+    client.post(
+        "/runs",
+        json={
+            "run_date": "2026-11-15",
+            "distance_km": 5,
+            "duration_seconds": 2000,
+            "run_type": "easy"
+        },
+        headers = auth_headers
+    )
+
+    response = client.get("/runs?run_type=tempo",headers=auth_headers,)
+
+    assert response.status_code == 200
+    assert len(response.json()) == 0
+
+def test_list_run_no_type(client, auth_headers):
+    client.post(
+        "/runs",
+        json={
+            "run_date": "2026-11-15",
+            "distance_km": 21,
+            "duration_seconds": 7550,
+            "run_type": "long"
+        },
+        headers = auth_headers
+    )
+
+    client.post(
+        "/runs",
+        json={
+            "run_date": "2026-11-15",
+            "distance_km": 5,
+            "duration_seconds": 2000,
+            "run_type": "easy"
+        },
+        headers = auth_headers
+    )
+
+    response = client.get("/runs",headers=auth_headers,)
+
+    assert response.status_code == 200
+    assert len(response.json()) == 2
+
+def test_filter_does_not_leak_between_users(client, auth_headers):
+    client.post(
+        "/runs", 
+        json={
+            "run_date": "2026-11-15",
+            "distance_km": 5,
+            "duration_seconds": 2000,
+            "run_type": "easy"
+        },
+        headers=auth_headers
+    )   # A's run
+
+    creds_b = {"email": "other@example.com", "password": "testpass456"}
+    client.post("/register", json=creds_b)
+    token_b = client.post("/login", json=creds_b).json()["access_token"]
+    headers_b = {"Authorization": f"Bearer {token_b}"}
+
+    response = client.get("/runs?run_type=long", headers=headers_b)
+    assert response.status_code == 200
+    assert response.json() == []
+
 def test_list_runs_no_auth(client, auth_headers):
     client.post(
-            "/runs",
-            json={
-                "run_date": "2026-11-15",
-                "distance_km": 21,
-                "duration_seconds": 7550,
-            },
-            headers = auth_headers,
-        )
+        "/runs",
+        json={
+            "run_date": "2026-11-15",
+            "distance_km": 21,
+            "duration_seconds": 7550,
+        },
+        headers = auth_headers,
+    )
 
     response = client.get("/runs")
 
@@ -101,14 +207,14 @@ def test_list_runs_no_auth(client, auth_headers):
 
 def test_list_runs_bad_token(client, auth_headers):
     client.post(
-                "/runs",
-                json={
-                    "run_date": "2026-11-15",
-                    "distance_km": 21,
-                    "duration_seconds": 7550,
-                },
-                headers = auth_headers,
-            )
+        "/runs",
+        json={
+            "run_date": "2026-11-15",
+            "distance_km": 21,
+            "duration_seconds": 7550,
+        },
+        headers = auth_headers,
+    )
     
     response = client.get(
         "/runs", 
