@@ -232,6 +232,104 @@ def test_list_bad_run_type(client, auth_headers):
 
     assert response.status_code == 422
 
+def test_list_run_with_max_km(client, auth_headers):
+    client.post("/runs",
+                json={"run_date": "2026-11-15","distance_km": 5,"duration_seconds": 7550, "run_type": "easy", "notes": "felt great"},
+                headers = auth_headers,)
+
+    client.post("/runs",
+                json={"run_date": "2026-11-15","distance_km": 10,"duration_seconds": 14950, "run_type": "tempo", "notes": "small knee pain"},
+                headers = auth_headers,)
+
+    client.post("/runs",
+                json={"run_date": "2026-11-15","distance_km": 21,"duration_seconds": 25550, "run_type": "long", "notes": "knee tape and 30g carb gel"},
+                headers = auth_headers,)
+
+    response = client.get(
+        "/runs",
+        headers=auth_headers,
+        params={"max_km": 10}
+    )
+
+    assert response.status_code == 200
+    distances = sorted(r["distance_km"] for r in response.json())
+    assert distances == [5, 10]
+
+def test_list_run_with_min_km(client, auth_headers):
+    client.post("/runs",
+                json={"run_date": "2026-11-15","distance_km": 5,"duration_seconds": 7550, "run_type": "easy", "notes": "felt great"},
+                headers = auth_headers,)
+
+    client.post("/runs",
+                json={"run_date": "2026-11-15","distance_km": 10,"duration_seconds": 14950, "run_type": "tempo", "notes": "small knee pain"},
+                headers = auth_headers,)
+
+    client.post("/runs",
+                json={"run_date": "2026-11-15","distance_km": 21,"duration_seconds": 25550, "run_type": "long", "notes": "knee tape and 30g carb gel"},
+                headers = auth_headers,)
+
+    response = client.get(
+        "/runs",
+        headers=auth_headers,
+        params={"min_km": 10}
+    )
+
+    assert response.status_code == 200
+    distances = sorted(r["distance_km"] for r in response.json())
+    assert distances == [10, 21]
+
+def test_list_run_with_q(client, auth_headers):
+    client.post("/runs",
+                json={"run_date": "2026-11-15","distance_km": 5,"duration_seconds": 7550, "run_type": "easy", "notes": "felt great"},
+                headers = auth_headers,)
+
+    client.post("/runs",
+                json={"run_date": "2026-11-15","distance_km": 10,"duration_seconds": 14950, "run_type": "tempo", "notes": "small knee pain"},
+                headers = auth_headers,)
+
+    client.post("/runs",
+                json={"run_date": "2026-11-15","distance_km": 21,"duration_seconds": 25550, "run_type": "long", "notes": "knee tape and 30g carb gel"},
+                headers = auth_headers,)
+
+    response = client.get(
+        "/runs",
+        headers=auth_headers,
+        params={"q": "knee"}
+    )
+
+    assert response.status_code == 200
+
+    runs = response.json()
+    assert all("knee" in r["notes"].lower() for r in runs)
+
+def test_list_run_with_q_and_km(client, auth_headers):
+    client.post("/runs",
+                json={"run_date": "2026-11-15","distance_km": 5,"duration_seconds": 7550, "run_type": "easy", "notes": "felt great"},
+                headers = auth_headers,)
+
+    client.post("/runs",
+                json={"run_date": "2026-11-15","distance_km": 10,"duration_seconds": 14950, "run_type": "tempo", "notes": "small knee pain"},
+                headers = auth_headers,)
+
+    client.post("/runs",
+                json={"run_date": "2026-11-15","distance_km": 21,"duration_seconds": 25550, "run_type": "long", "notes": "knee tape and 30g carb gel"},
+                headers = auth_headers,)
+
+    response = client.get(
+        "/runs",
+        headers=auth_headers,
+        params={"q": "knee", "max_km": 10}
+    )
+
+    assert response.status_code == 200
+
+    runs = response.json()
+
+    assert len(runs) == 1
+    assert runs[0]["distance_km"] == 10
+    assert runs[0]["notes"] == "small knee pain"
+
+
 def test_runs_are_isolated_between_users(client, auth_headers):
     client.post(
         "/runs",

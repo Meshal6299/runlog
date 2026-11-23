@@ -53,7 +53,7 @@ def health():
     return {"status": "ok"}
 
 @app.get("/runs")
-def list_runs(user_id: int = Depends(get_current_user_id), run_type: RunType | None = None):
+def list_runs(user_id: int = Depends(get_current_user_id), run_type: RunType | None = None, min_km: float | None = None, max_km: float | None = None, q: str | None = None,):
     conn = get_connection()
 
     conditions = ["user_id = ?"]
@@ -62,6 +62,18 @@ def list_runs(user_id: int = Depends(get_current_user_id), run_type: RunType | N
     if run_type is not None:
         conditions.append("run_type = ?")
         values.append(run_type)
+
+    if min_km is not None:
+        conditions.append("distance_km >= ?")
+        values.append(min_km)
+
+    if max_km is not None:
+        conditions.append("distance_km <= ?")
+        values.append(max_km)
+
+    if q is not None:
+        conditions.append("notes like ?")
+        values.append(f"%{q}%")
 
     sql = "select * from runs where " + " and ".join(conditions) + " order by run_date desc"
 
