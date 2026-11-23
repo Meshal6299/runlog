@@ -54,6 +54,20 @@ def test_create_run_reject_bad_time(client, auth_headers):
     )
     assert response.status_code == 422
 
+def test_create_run_rejects_bad_run_type(client, auth_headers):
+    response = client.post(
+        "/runs",
+        json={
+            "run_date": "2026-11-15",
+            "distance_km": 51,
+            "duration_seconds": 99900,
+            "run_type": "banana"
+        },
+        headers = auth_headers
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "run_type"]
+
 def test_list_runs(client, auth_headers):
     client.post(
         "/runs",
@@ -104,6 +118,13 @@ def test_list_runs_bad_token(client, auth_headers):
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid or expired token"
 
+def test_list_bad_run_type(client, auth_headers):
+    response = client.get(
+        "/runs?run_type=banana", 
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 422
 
 def test_runs_are_isolated_between_users(client, auth_headers):
     client.post(

@@ -1,7 +1,7 @@
 import os
 import sqlite3
 from datetime import UTC, date, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Literal
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException
@@ -35,11 +35,13 @@ def get_current_user_id(
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return int(payload["sub"])
 
+RunType = Literal["long", "easy", "recovery", "interval", "tempo", "threshold", "race"]
+
 class RunCreate(BaseModel):
     run_date: date
     distance_km: float = Field(gt=0)
     duration_seconds: int = Field(gt=0)
-    run_type: str | None = None
+    run_type: RunType | None = None
     notes: str | None = None
 
 class UserCreate(BaseModel):
@@ -51,9 +53,19 @@ def health():
     return {"status": "ok"}
 
 @app.get("/runs")
-def list_runs(user_id: int = Depends(get_current_user_id)):
+def list_runs(user_id: int = Depends(get_current_user_id), run_type: RunType | None = None):
     conn = get_connection()
-    rows = conn.execute("select * from runs where user_id = ? order by run_date desc",(user_id,)).fetchall()
+
+    conditions = ["user_id = ?"]
+    values = [user_id]
+
+    if run_type is not None:
+        conditions.append("run_type = ?")
+        values.append(run_type)
+
+    sql = "select * from runs where " + " and ".join(conditions) + " order by run_date desc"
+
+    rows = conn.execute(sql, values).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
