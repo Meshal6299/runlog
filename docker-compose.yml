@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      DATABASE_PATH: /data/runlog.db
+    volumes:
+      - runlog-data:/data
+
+volumes:
+  runlog-data:
