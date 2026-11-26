@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RunLog</title>
+</head>
+<body>
+    <h1>Runlog</h1>
+
+    <section id="auth">
+        <input id="email" type="email" placeholder="Email" >
+        <input id="password" type="password" placeholder="Password (8+ characters)">
+        <button id="login-btn">Log in</button>
+        <button id="register-btn">Register</button>
+        <p id="message"></p>
+    </section>
+
+    <section id="app" hidden>
+        <button id="logout-btn">Log out</button>
+        <br><br>
+        <table style="border: 1px black;">
+            <thead>
+                <tr><th>Date</th><th>km</th><th>Time</th><th>Type</th><th>Notes</th></tr>
+            </thead>
+            <tbody id="runs-body"></tbody>
+        </table>
+        <br>
+        <h2>Add a run</h2>
+        <form id="run-form">
+            <input id="run-date" type="date"><br>
+            <input id="distance" type="number" placeholder="km"><br>
+            <input id="hours" type="number" min="0" placeholder="h" style="width:4em">
+            <input id="minutes" type="number" min="0" max="59" placeholder="min" style="width:4em">
+            <input id="seconds" type="number" min="0" max="59" placeholder="s" style="width:4em"><br>
+            <select id="run-type">
+                <option value="">(type)</option>
+                <option>long</option><option>easy</option><option>recovery</option>
+                <option>interval</option><option>tempo</option><option>threshold</option><option>race</option>
+            </select><br>
+            <input id="notes" type="text" placeholder="Notes"><br>
+            <button type="submit">Add</button>
+            <p id="run-message"></p>
+        </form>
+        <h2>Search</h2>
+        <form id="filter-form">
+            <input id="f-q" type="text" placeholder="Search notes">
+            <select id="f-type">
+                <option value="">All types</option>
+                <option>long</option><option>easy</option><option>recovery</option>
+                <option>interval</option><option>tempo</option><option>threshold</option><option>race</option>
+            </select>
+            <input id="f-min" type="number" step="0.1" placeholder="min km">
+            <input id="f-max" type="number" step="0.1" placeholder="max km"><br>
+            <button type="submit">Search</button>
+            <button type="reset" id="f-reset">Clear</button>
+        </form>
+    </section>
+
+    <script>
+        function showApp() {
+            const loggedIn = localStorage.getItem("token") !== null;
+            document.getElementById("auth").hidden = loggedIn;
+            document.getElementById("app").hidden = !loggedIn;
+
+            if(loggedIn) loadRuns();
+        }
+
+        function errorText(data) {
+            if (typeof data.detail === "string") return data.detail;      // 409, 401: the server's own message
+
+            if (Array.isArray(data.detail) && data.detail.length > 0) {   // 422: validation errors
+                const loc = data.detail[0].loc;
+                const field = loc[loc.length - 1];                        // "password", "email", ...
+                if (field === "password") return "Password must be at least 8 characters";
+                if (field === "email") return "Please enter a valid email";
+                if (field === "distance_km") return "Distance must be greater than 0";
+                if (field === "duration_seconds") return "Duration must be greater than 0";
+                if (field === "run_date") return "Please enter a valid date";
+            }
+            return "Something went wrong";
+        }
+
+        function formatDuration(totalSeconds) {
+            const hours = Math.floor(totalSeconds / 3600);
+            const mins = Math.floor((totalSeconds % 3600) / 60);
+            const secs = totalSeconds % 60;
+
+            const mm = String(mins).padStart(2, "0");
+            const ss = String(secs).padStart(2, "0");
+
+            return hours > 0 ? `${hours}:${mm}:${ss}` : `${mins}:${ss}`;
+        }
+
+        function currentFilters() {
+            const params = new URLSearchParams();
+            const q = document.getElementById("f-q").value.trim();
+            const type = document.getElementById("f-type").value;
+            const min = document.getElementById("f-min").value;
+            const max = document.getElementById("f-max").value;
+
+            if (q) params.set("q", q);
+            if (type) params.set("run_type", type);
+            if (min) params.set("min_km", min);
+            if (max) params.set("max_km", max);
+            return params.toString();            
+        }
+
+        async function api(path, options = {}) {
+            const token = localStorage.getItem("token");
+            const res = await fetch(path, {
+                ...options,
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: "Bearer " + token,
+                    ...(options.headers || {}),
+                },
+            });
+            if (res.status === 401) {            
+                localStorage.removeItem("token");
+                showApp();
+            }
+            return res;
+        }
+
+        async function loadRuns() {
+            const qs = currentFilters();
+            const res = await api(qs ? `/runs?${qs}` : "/runs");
+            if (!res.ok) return;
+            const runs = await res.json();
+
+            const tbody = document.getElementById("runs-body");
+            tbody.replaceChildren();                       
+
+            for (const run of runs) {
+                const tr = document.createElement("tr");
+                const cells = [
+                    run.run_date,
+                    run.distance_km,
+                    formatDuration(run.duration_seconds),
+                    run.run_type ?? "",                    
+                    run.notes ?? "",
+                ];
+                for (const value of cells) {
+                    const td = document.createElement("td");
+                    td.textContent = value;      
+                    tr.appendChild(td);
+                }
+
+                const td = document.createElement("td");
+
+                const editBtn = document.createElement("button");
+                editBtn.textContent = "Edit";
+                editBtn.addEventListener("click", () => editRun(run.id));
+                td.appendChild(editBtn);
+
+                const deleteBtn = document.createElement("button");
+                deleteBtn.textContent = "Delete";
+                deleteBtn.addEventListener("click", () => deleteRun(run.id));
+                td.appendChild(deleteBtn);
+
+                tr.appendChild(td);
+                tbody.appendChild(tr);
+            }
+        }
+
+        async function deleteRun(id) {
+            if (!confirm("Delete this run?")) return;
+
+            const res = await api(`/runs/${id}`, { method: "DELETE" });
+
+            if(res.ok) {
+                loadRuns();
+            } else{
+                errorText()
+            }
+        }
+
+        const message = document.getElementById("message");
+
+        document.getElementById("login-btn").addEventListener("click", async () => {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+
+            const res = await fetch("/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, password})
+            });
+
+            const data = await res.json();
+            
+            if(res.ok) {
+                localStorage.setItem("token", data.access_token);
+                document.getElementById("password").value = "";
+                message.textContent = ""
+                showApp();
+            } else {
+                message.textContent = errorText(data);
+            }
+        });
+
+        document.getElementById("register-btn").addEventListener("click", async () => {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+
+            const res = await fetch("/register", {
+                method: "POST",
+                headers: {"Content-Type": "application/json" },
+                body: JSON.stringify({ email, password})
+            })
+
+            let data = {};
+            try { data = await res.json(); } catch { /* not JSON */ }
+
+            if(res.ok) {
+                document.getElementById("password").value = "";
+                message.textContent = "Registered, now log in"
+            } else {
+                message.textContent = errorText(data);
+            }
+
+        })
+
+        document.getElementById("logout-btn").addEventListener("click", async () => {
+            localStorage.removeItem("token")
+            showApp();
+        })
+
+        document.getElementById("run-form").addEventListener("submit", async (event) => {
+            event.preventDefault();                       
+
+            const hours = Number(document.getElementById("hours").value) || 0;
+            const minutes = Number(document.getElementById("minutes").value) || 0;
+            const seconds = Number(document.getElementById("seconds").value) || 0;
+
+            const body = {
+                run_date: document.getElementById("run-date").value,
+                distance_km: Number(document.getElementById("distance").value),
+                duration_seconds: hours * 3600 + minutes * 60 + seconds,
+                run_type: document.getElementById("run-type").value || null,
+                notes: document.getElementById("notes").value || null,
+            };
+
+            const res = await api("/runs", { method: "POST", body: JSON.stringify(body) });
+
+            let data = {};
+            try { data = await res.json(); } catch { /* not JSON */ }
+
+            const runMessage = document.getElementById("run-message");
+            if(res.ok) {
+                document.getElementById("run-form").reset();
+                runMessage.textContent = "";
+                loadRuns();
+            } else {
+                runMessage.textContent = errorText(data);
+            }
+        });
+
+        document.getElementById("filter-form").addEventListener("submit", (event) => {
+            event.preventDefault();
+            loadRuns();
+        });
+
+        document.getElementById("filter-form").addEventListener("reset", () => {
+            setTimeout(loadRuns, 0);
+        });
+
+        showApp();
+
+    </script>
+    <style>
+        table {border-collapse: collapse;}
+        th, td {border: 1px solid black; padding: 6px 10px; text-align: left;}
+        th {background: #eee;}
+    </style>
+</body>
+</html>
